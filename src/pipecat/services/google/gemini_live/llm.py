@@ -664,7 +664,7 @@ class GeminiLiveLLMService(LLMService):
         """
         await super().start(frame)
 
-        # Dograh: we initiate the pipeline before we set the
+        # Model-proxy: we initiate the pipeline before we set the
         # system instruction so that pre_call fetching can
         # populate the context variables. We dont want to
         # connect with default system instructions.

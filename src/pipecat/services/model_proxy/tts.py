@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: BSD 2-Clause License
 #
 
-"""Dograh TTS Service implementation using WebSocket streaming."""
+"""Model-proxy TTS Service implementation using WebSocket streaming."""
 
 import asyncio
 import base64
@@ -38,7 +38,7 @@ try:
     from websockets.protocol import State
 except ModuleNotFoundError as e:
     logger.error(f"Exception: {e}")
-    logger.error("In order to use Dograh TTS, you need to `pip install websockets`.")
+    logger.error("In order to use the model proxy TTS, you need to `pip install websockets`.")
     raise Exception(f"Missing module: {e}")
 
 
@@ -48,7 +48,7 @@ def calculate_word_times(
     """Calculate word timestamps from alignment information.
 
     Args:
-        alignment_info: Word alignment data from Dograh API.
+        alignment_info: Word alignment data from the model proxy API.
         cumulative_time: Base time offset for this chunk.
 
     Returns:
@@ -67,8 +67,8 @@ def calculate_word_times(
 
 
 @dataclass
-class DograhTTSSettings(TTSSettings):
-    """Settings for DograhTTSService.
+class ModelProxyTTSSettings(TTSSettings):
+    """Settings for ModelProxyTTSService.
 
     Parameters:
         speed: Speech speed control (0.5 to 2.0).
@@ -81,39 +81,39 @@ class DograhTTSSettings(TTSSettings):
     volume: float | None | _NotGiven = field(default_factory=lambda: NOT_GIVEN)
 
 
-class DograhTTSService(WebsocketTTSService):
-    """Dograh WebSocket-based TTS service with word timestamps.
+class ModelProxyTTSService(WebsocketTTSService):
+    """Model-proxy WebSocket-based TTS service with word timestamps.
 
-    This service provides real-time text-to-speech using Dograh's unified WebSocket API.
+    This service provides real-time text-to-speech using the model proxy's unified WebSocket API.
     The actual TTS provider (ElevenLabs, OpenAI, Deepgram, etc.) is determined by the
-    Dograh backend configuration. Supports word-level timestamps and audio streaming.
+    the model proxy backend configuration. Supports word-level timestamps and audio streaming.
     """
 
-    Settings = DograhTTSSettings
+    Settings = ModelProxyTTSSettings
 
     def __init__(
         self,
         *,
         api_key: str,
-        base_url: str = "wss://services.dograh.com",
+        base_url: str = "",
         ws_path: str = "/api/v1/tts/stream",
         sample_rate: int | None = None,
-        settings: DograhTTSSettings | None = None,
+        settings: ModelProxyTTSSettings | None = None,
         text_aggregation_mode: TextAggregationMode | None = None,
         **kwargs,
     ):
-        """Initialize Dograh TTS service.
+        """Initialize the model-proxy TTS service.
 
         Args:
-            api_key: The Dograh API key for authentication.
-            base_url: WebSocket base URL for Dograh API. Defaults to "wss://services.dograh.com".
+            api_key: the model proxy API key for authentication.
+            base_url: WebSocket base URL for the model proxy API. Required: there is no default host.
             ws_path: WebSocket path for TTS streaming. Defaults to "/api/v1/tts/stream".
             sample_rate: Output audio sample rate in Hz. Defaults to None.
             settings: TTS settings including model, voice, speed, pitch, volume.
             text_aggregation_mode: How to aggregate incoming text before synthesis.
             **kwargs: Additional arguments passed to the parent service.
         """
-        default_settings = DograhTTSSettings(
+        default_settings = ModelProxyTTSSettings(
             model="default",
             voice="default",
             language="en",
@@ -159,7 +159,7 @@ class DograhTTSService(WebsocketTTSService):
         """Check if this service can generate processing metrics.
 
         Returns:
-            True, as Dograh service supports metrics generation.
+            True, as the model proxy service supports metrics generation.
         """
         return True
 
@@ -177,7 +177,7 @@ class DograhTTSService(WebsocketTTSService):
         self._voice_settings["language"] = language.value
 
     async def _connect_websocket(self):
-        """Establish the websocket connection to Dograh TTS service."""
+        """Establish the websocket connection to the model proxy TTS service."""
         try:
             if self._websocket and self._websocket.state is State.OPEN:
                 return
@@ -188,7 +188,7 @@ class DograhTTSService(WebsocketTTSService):
                 "Content-Type": "application/json",
             }
 
-            logger.debug(f"Connecting to Dograh TTS WebSocket at {url}")
+            logger.debug(f"Connecting to the model proxy TTS WebSocket at {url}")
             ws = await websocket_connect(url, additional_headers=headers)
             self._websocket = ws
 
@@ -207,30 +207,30 @@ class DograhTTSService(WebsocketTTSService):
 
             await ws.send(json.dumps(config_msg))
 
-            logger.info(f"Connected to Dograh TTS service")
+            logger.info(f"Connected to the model proxy TTS service")
 
         except Exception as e:
             self._websocket = None
-            logger.error(f"Failed to connect to Dograh TTS service: {e}")
+            logger.error(f"Failed to connect to the model proxy TTS service: {e}")
             raise
 
     async def _disconnect_websocket(self):
-        """Close the websocket connection to Dograh TTS service."""
+        """Close the websocket connection to the model proxy TTS service."""
         try:
             await self.stop_all_metrics()
 
             if self._websocket:
-                logger.debug("Disconnecting from Dograh TTS service")
+                logger.debug("Disconnecting from the model proxy TTS service")
                 await self._websocket.close()
-                logger.debug("Disconnected from Dograh TTS service")
+                logger.debug("Disconnected from the model proxy TTS service")
         except Exception as e:
-            logger.error(f"Error disconnecting from Dograh TTS service: {e}")
+            logger.error(f"Error disconnecting from the model proxy TTS service: {e}")
         finally:
             await self.remove_active_audio_context()
             self._websocket = None
 
     async def _connect(self):
-        """Connect to the Dograh TTS service with full initialization."""
+        """Connect to the model proxy TTS service with full initialization."""
         await super()._connect()
 
         await self._connect_websocket()
@@ -242,7 +242,7 @@ class DograhTTSService(WebsocketTTSService):
             self._keepalive_task = self.create_task(self._keepalive_task_handler())
 
     async def _disconnect(self):
-        """Disconnect from Dograh TTS service and clean up tasks."""
+        """Disconnect from the model proxy TTS service and clean up tasks."""
         await super()._disconnect()
 
         if self._receive_task:
@@ -269,7 +269,7 @@ class DograhTTSService(WebsocketTTSService):
         raise Exception("Websocket not connected")
 
     async def _receive_messages(self):
-        """Handle incoming WebSocket messages from Dograh."""
+        """Handle incoming WebSocket messages from the model proxy."""
         async for message in self._get_websocket():
             try:
                 msg = json.loads(message)
@@ -277,7 +277,7 @@ class DograhTTSService(WebsocketTTSService):
                 ctx_id = msg.get("context_id")
 
                 # Handle final messages first. Unlike ElevenLabs's isFinal (which
-                # is a response to close_context), Dograh's "final" is sent
+                # is a response to close_context), the model proxy's "final" is sent
                 # proactively by the server to signal it's done generating audio.
                 # We must call remove_audio_context to signal the parent's
                 # _handle_audio_context loop to stop (otherwise it waits for a
@@ -360,15 +360,15 @@ class DograhTTSService(WebsocketTTSService):
                         # Raise CancelledError to cleanly cancel the receive task
                         raise asyncio.CancelledError("Quota exceeded - cancelling receive task")
                     else:
-                        raise Exception(f"Dograh TTS error: {error_msg}")
+                        raise Exception(f"the model proxy TTS error: {error_msg}")
 
             except asyncio.CancelledError:
                 raise
             except json.JSONDecodeError as e:
-                logger.error(f"Failed to decode message from Dograh: {e}")
+                logger.error(f"Failed to decode message from the model proxy: {e}")
                 raise
             except Exception as e:
-                logger.error(f"Error processing Dograh TTS message: {e}")
+                logger.error(f"Error processing the model proxy TTS message: {e}")
                 raise
 
     async def _keepalive_task_handler(self):
@@ -404,7 +404,7 @@ class DograhTTSService(WebsocketTTSService):
 
     @traced_tts
     async def run_tts(self, text: str, context_id: str) -> AsyncGenerator[Frame | None, None]:
-        """Generate speech from text using Dograh's streaming WebSocket API.
+        """Generate speech from text using the model proxy's streaming WebSocket API.
 
         Args:
             text: The text to synthesize into speech.
@@ -457,7 +457,7 @@ class DograhTTSService(WebsocketTTSService):
             yield ErrorFrame(error=f"Unknown error occurred: {e}")
 
     async def _close_context(self, context_id: str):
-        """Close a Dograh TTS context via WebSocket.
+        """Close a the model proxy TTS context via WebSocket.
 
         Args:
             context_id: The context ID to close.
@@ -479,11 +479,11 @@ class DograhTTSService(WebsocketTTSService):
         self._reset_state()
 
     async def on_audio_context_interrupted(self, context_id: str):
-        """Close the Dograh context when the bot is interrupted."""
+        """Close the model proxy context when the bot is interrupted."""
         await self._close_context(context_id)
 
     async def on_audio_context_completed(self, context_id: str):
-        """Close the Dograh context after all audio has been played."""
+        """Close the model proxy context after all audio has been played."""
         await self._close_context(context_id)
 
     async def flush_audio(self, context_id: str | None = None):

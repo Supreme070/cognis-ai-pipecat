@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: BSD 2-Clause License
 #
 
-"""Dograh LLM Service implementation using OpenAI-compatible interface."""
+"""Model-proxy LLM Service implementation using OpenAI-compatible interface."""
 
 from loguru import logger
 from openai import AsyncStream
@@ -17,15 +17,15 @@ from pipecat.services.openai.base_llm import OpenAILLMInvocationParams, OpenAILL
 from pipecat.services.openai.llm import OpenAILLMService
 
 
-class DograhLLMService(OpenAILLMService):
-    """A unified LLM service using Dograh's API with OpenAI-compatible interface.
+class ModelProxyLLMService(OpenAILLMService):
+    """A unified LLM service using the model proxy's API with OpenAI-compatible interface.
 
-    This service extends OpenAILLMService to connect to Dograh's unified API endpoint
+    This service extends OpenAILLMService to connect to the model proxy's unified API endpoint
     while maintaining full compatibility with OpenAI's interface. The actual LLM provider
-    (OpenAI, Groq, Google, etc.) is determined by the Dograh backend configuration.
+    (OpenAI, Groq, Google, etc.) is determined by the model proxy backend configuration.
     """
 
-    # The Dograh unified endpoint routes to multiple providers, not all of which
+    # the model proxy unified endpoint routes to multiple providers, not all of which
     # accept the "developer" message role. Disable it so the adapter converts
     # "developer" messages to "user" messages before sending.
     supports_developer_role = False
@@ -34,15 +34,15 @@ class DograhLLMService(OpenAILLMService):
         self,
         *,
         api_key: str,
-        base_url: str = "https://services.dograh.com/api/v1/llm",
+        base_url: str = "",
         settings: OpenAILLMSettings | None = None,
         **kwargs,
     ):
-        """Initialize Dograh LLM service.
+        """Initialize the model-proxy LLM service.
 
         Args:
-            api_key: The Dograh API key for authentication.
-            base_url: The base URL for Dograh API. Defaults to "https://services.dograh.com/api/v1/llm".
+            api_key: the model proxy API key for authentication.
+            base_url: The base URL for the model proxy API. Required: there is no default host.
             settings: LLM settings including model, temperature, etc.
             **kwargs: Additional keyword arguments passed to OpenAILLMService.
         """
@@ -54,7 +54,7 @@ class DograhLLMService(OpenAILLMService):
         self._start_metadata = None
 
     def create_client(self, api_key=None, base_url=None, **kwargs):
-        """Create OpenAI-compatible client for Dograh API endpoint.
+        """Create OpenAI-compatible client for the model proxy API endpoint.
 
         Args:
             api_key: API key for authentication. If None, uses instance api_key.
@@ -62,9 +62,9 @@ class DograhLLMService(OpenAILLMService):
             **kwargs: Additional arguments passed to the client constructor.
 
         Returns:
-            An OpenAI-compatible client configured for Dograh's API.
+            An OpenAI-compatible client configured for the model proxy's API.
         """
-        logger.debug(f"Creating Dograh LLM client with base URL: {base_url or self._base_url}")
+        logger.debug(f"Creating the model proxy LLM client with base URL: {base_url or self._base_url}")
         return super().create_client(api_key, base_url, **kwargs)
 
     async def process_frame(self, frame: Frame, direction: FrameDirection) -> None:
@@ -104,7 +104,7 @@ class DograhLLMService(OpenAILLMService):
     async def get_chat_completions(
         self, context: LLMContext
     ) -> AsyncStream[ChatCompletionChunk] | None:
-        """Override to handle Dograh-specific quota errors.
+        """Override to handle model-proxy-specific quota errors.
 
         Args:
             context: Context to use for the chat completion.
@@ -122,7 +122,7 @@ class DograhLLMService(OpenAILLMService):
             error_str = str(e)
             if "quota_exceeded" in error_str and "403" in error_str:
                 # Extract the meaningful error message
-                error_msg = "Dograh Service quota exceeded"
+                error_msg = "Model proxy service quota exceeded"
 
                 # Push a fatal error frame to trigger pipeline shutdown
                 await self.push_frame(
